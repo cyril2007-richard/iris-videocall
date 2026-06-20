@@ -361,6 +361,12 @@
 
         <!-- Video stream -->
         <video id="remoteVideo" autoplay playsinline></video>
+        <img id="remoteVideoImg" style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 24px;">
+
+        <!-- Mixed content warning alert -->
+        <div id="mixedContentWarning" style="display: none; position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.45); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: #fca5a5; font-size: 0.85rem; padding: 12px 24px; border-radius: 16px; z-index: 20; text-align: center; max-width: 85%; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); pointer-events: auto;">
+            ⚠️ <strong>Video stream blocked:</strong> Click the connection settings/lock icon in the URL bar, open <strong>Site settings</strong>, and change <strong>Insecure content</strong> to <strong>Allow</strong>.
+        </div>
 
         <!-- Standby elements when idle -->
         <div class="standby-view" id="standbyView">
@@ -464,6 +470,7 @@
         const standbyView = document.getElementById('standbyView');
         const batteryBadge = document.getElementById('batteryBadge');
         const remoteVideo = document.getElementById('remoteVideo');
+        const remoteVideoImg = document.getElementById('remoteVideoImg');
         const callInfoBadge = document.getElementById('callInfoBadge');
         const callTimeText = document.getElementById('callTimeText');
         const callBtn = document.getElementById('callBtn');
@@ -510,6 +517,18 @@
             declineBtn.addEventListener('click', endCall);
             acceptBtn.addEventListener('click', acceptIncomingCall);
             muteBtn.addEventListener('click', toggleMute);
+
+            // Bind MJPEG stream onload/onerror handlers
+            remoteVideoImg.addEventListener('load', () => {
+                callTimeText.innerText = "STREAM LIVE";
+                document.getElementById('mixedContentWarning').style.display = 'none';
+            });
+
+            remoteVideoImg.addEventListener('error', () => {
+                if (currentState === 'in_call') {
+                    document.getElementById('mixedContentWarning').style.display = 'block';
+                }
+            });
         });
 
         // ----------------- SYNTHESIZED SOUND LOOP (Web Audio API) -----------------
@@ -564,9 +583,9 @@
             peerConnection.ontrack = (event) => {
                 if (remoteVideo.srcObject !== event.streams[0]) {
                     remoteVideo.srcObject = event.streams[0];
-                    remoteVideo.className = 'active';
+                    // Keep WebRTC video element visually hidden; MJPEG is rendered in remoteVideoImg.
+                    remoteVideo.className = '';
                     standbyView.style.display = 'none';
-                    callTimeText.innerText = "STREAM LIVE";
                 }
             };
 
@@ -603,6 +622,12 @@
             }
             remoteVideo.srcObject = null;
             remoteVideo.className = '';
+            
+            // Clean up MJPEG stream
+            remoteVideoImg.removeAttribute('src');
+            remoteVideoImg.style.display = 'none';
+            document.getElementById('mixedContentWarning').style.display = 'none';
+            
             standbyView.style.display = 'flex';
         }
 
@@ -687,6 +712,12 @@
                 callInfoBadge.classList.add('active');
                 callTimeText.innerText = "CONNECTING...";
 
+                // Load MJPEG stream from the Pi camera feed
+                remoteVideoImg.src = "https://172.20.10.2:5000/video_feed";
+                remoteVideoImg.style.display = "block";
+                remoteVideo.style.display = "none";
+                standbyView.style.display = "none";
+
                 // Start WebRTC Negotiation
                 if (isCaller) {
                     await initWebRTC();
@@ -695,10 +726,10 @@
                     const offer = await peerConnection.createOffer();
                     await peerConnection.setLocalDescription(offer);
                     
-                    // 1. Attempt Direct WebRTC POST to the local Pi server at http://172.20.10.2:5000/offer
+                    // 1. Attempt Direct WebRTC POST to the local Pi server at https://172.20.10.2:5000/offer
                     try {
-                        console.log("Attempting direct local WebRTC connection to http://172.20.10.2:5000/offer...");
-                        const response = await fetch('http://172.20.10.2:5000/offer', {
+                        console.log("Attempting direct local WebRTC connection to https://172.20.10.2:5000/offer...");
+                        const response = await fetch('https://172.20.10.2:5000/offer', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ sdp: offer.sdp, type: offer.type })
@@ -712,7 +743,7 @@
                             return; // Direct connection succeeded, skip Firebase negotiation
                         }
                     } catch (err) {
-                        console.warn("Direct connection to http://172.20.10.2:5000/offer failed. Falling back to Firebase:", err.message);
+                        console.warn("Direct connection to https://172.20.10.2:5000/offer failed. Falling back to Firebase:", err.message);
                     }
 
                     // 2. Fallback: Write Offer to Firebase for remote signaling
