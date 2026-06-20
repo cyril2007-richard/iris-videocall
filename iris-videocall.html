@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iris Caregiver Dashboard - WebRTC Client</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background: linear-gradient(-45deg, #0a0a0c, #121217, #0b151a, #160c1d);
+            background-size: 400% 400%;
+            animation: gradientBG 18s ease infinite;
+            color: #ffffff;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Glassmorphism Styles */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border-radius: 24px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Header / Brand info */
+        header {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .logo-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 12px #22c55e;
+            transition: all 0.3s ease;
+        }
+
+        .logo-dot.offline {
+            background: #ef4444;
+            box-shadow: 0 0 12px #ef4444;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Main Workspace Container */
+        .call-container {
+            position: relative;
+            width: 90%;
+            max-width: 1000px;
+            aspect-ratio: 16 / 9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Streaming Elements */
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 24px;
+            background: #08080a;
+            display: none;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        video.active {
+            display: block;
+        }
+
+        /* Standby Avatar placeholder */
+        .standby-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            text-align: center;
+        }
+
+        .avatar-ring {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.03);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .avatar-ring::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            animation: rotateRing 20s linear infinite;
+        }
+
+        @keyframes rotateRing {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .avatar-ring svg {
+            width: 50px;
+            height: 50px;
+            fill: rgba(255, 255, 255, 0.7);
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Control Panel bar */
+        .controls-overlay {
+            position: absolute;
+            bottom: 30px;
+            padding: 12px 28px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 10;
+        }
+
+        .btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        .btn svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        .btn:hover {
+            transform: scale(1.1);
+        }
+
+        .btn-call {
+            background: #22c55e;
+            box-shadow: 0 0 16px rgba(34, 197, 94, 0.4);
+        }
+
+        .btn-call:hover {
+            background: #16a34a;
+            box-shadow: 0 0 24px rgba(34, 197, 94, 0.6);
+        }
+
+        .btn-hangup {
+            background: #ef4444;
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+            display: none;
+        }
+
+        .btn-hangup:hover {
+            background: #dc2626;
+            box-shadow: 0 0 24px rgba(239, 68, 68, 0.6);
+        }
+
+        .btn-mute.muted {
+            background: #f97316;
+            color: #ffffff;
+        }
+
+        /* Ringing Dialog Modal Overlay */
+        .incoming-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+        }
+
+        .incoming-modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .incoming-card {
+            width: 90%;
+            max-width: 400px;
+            padding: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+            transform: scale(0.85);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .incoming-modal-overlay.active .incoming-card {
+            transform: scale(1);
+        }
+
+        .caller-pulse {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: rgba(34, 197, 94, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulseGreen 1.8s infinite;
+        }
+
+        @keyframes pulseGreen {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            70% { box-shadow: 0 0 0 25px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        .caller-pulse svg {
+            width: 44px;
+            height: 44px;
+            fill: #22c55e;
+        }
+
+        .incoming-actions {
+            display: flex;
+            gap: 30px;
+        }
+
+        .btn-action {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .btn-action svg {
+            width: 28px;
+            height: 28px;
+            fill: currentColor;
+        }
+
+        .btn-accept {
+            background: #22c55e;
+            box-shadow: 0 0 16px rgba(34, 197, 94, 0.4);
+        }
+
+        .btn-accept:hover {
+            background: #16a34a;
+            transform: scale(1.1);
+        }
+
+        .btn-decline {
+            background: #ef4444;
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-decline:hover {
+            background: #dc2626;
+            transform: scale(1.1);
+        }
+
+        /* Subtle indicator info */
+        .call-info-badge {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            z-index: 10;
+            display: none;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .call-info-badge.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header info -->
+    <header>
+        <div id="statusDot" class="logo-dot offline"></div>
+        <h1 id="deviceHeader">IRIS GLASSES (OFFLINE)</h1>
+    </header>
+
+    <!-- Main call screen -->
+    <div class="call-container glass-card" id="screenWrapper">
+        
+        <div class="status-badge call-info-badge" id="callInfoBadge">
+            <span class="logo-dot" style="background:#22c55e; box-shadow:0 0 8px #22c55e;"></span>
+            <span id="callTimeText">CONNECTED</span>
+        </div>
+
+        <!-- Video stream -->
+        <video id="remoteVideo" autoplay playsinline></video>
+
+        <!-- Standby elements when idle -->
+        <div class="standby-view" id="standbyView">
+            <div class="avatar-ring">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+            </div>
+            <div>
+                <h2 style="font-weight: 600; margin-bottom: 6px;">Caregiver Monitor</h2>
+                <p style="color: rgba(255,255,255,0.4); font-size: 0.95rem;">Standby mode. Awaiting connection to smart glasses.</p>
+            </div>
+            <div class="status-badge" id="batteryBadge" style="display:none;">
+                <span>🔋 Battery: --%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating controls overlay -->
+    <div class="controls-overlay glass-card">
+        <button class="btn btn-mute" id="muteBtn" title="Mute Microphone">
+            <svg viewBox="0 0 24 24" id="micIcon">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+            </svg>
+        </button>
+        <button class="btn btn-call" id="callBtn" title="Initiate Call to Glasses">
+            <svg viewBox="0 0 24 24">
+                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+        </button>
+        <button class="btn btn-hangup" id="hangupBtn" title="End Call">
+            <svg viewBox="0 0 24 24" style="transform: rotate(135deg);">
+                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Incoming ring dialog -->
+    <div class="incoming-modal-overlay" id="incomingOverlay">
+        <div class="incoming-card glass-card">
+            <div class="caller-pulse">
+                <svg viewBox="0 0 24 24">
+                    <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.57-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.57-2.3-.57-3.54 0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.59c0-.55-.45-1-1-1z"/>
+                </svg>
+            </div>
+            <div>
+                <h2 style="font-weight: 600; margin-bottom: 6px; font-size: 1.5rem;">Incoming Call</h2>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.95rem;">Iris Smart Glasses are calling...</p>
+            </div>
+            <div class="incoming-actions">
+                <button class="btn-action btn-decline" id="declineBtn" title="Decline Call">
+                    <svg viewBox="0 0 24 24" style="transform: rotate(135deg);">
+                        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                    </svg>
+                </button>
+                <button class="btn-action btn-accept" id="acceptBtn" title="Accept Call">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Imports via ESM -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getDatabase, ref, update, onValue, push, remove, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+        // Firebase Configuration (Direct Database Connection)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCaN5cNMQVhGoxYsedMC_QTLMiROan-wPU",
+            authDomain: "iris-11574.firebaseapp.com",
+            projectId: "iris-11574",
+            storageBucket: "iris-11574.firebasestorage.app",
+            messagingSenderId: "534713737234",
+            appId: "1:534713737234:web:f0d688d603e7af026e78cb",
+            databaseURL: "https://iris-11574-default-rtdb.firebaseio.com/"
+        };
+
+        const BLIND_USER_ID = "demo_user_123";
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // STUN configurations for peer connection
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        let peerConnection = null;
+        let localStream = null;
+        let currentState = 'idle';
+        let isCaller = false;
+        let audioCtx = null;
+        let ringInterval = null;
+        let localMuted = false;
+
+        // Dom Elements
+        const statusDot = document.getElementById('statusDot');
+        const deviceHeader = document.getElementById('deviceHeader');
+        const standbyView = document.getElementById('standbyView');
+        const batteryBadge = document.getElementById('batteryBadge');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const callInfoBadge = document.getElementById('callInfoBadge');
+        const callTimeText = document.getElementById('callTimeText');
+        const callBtn = document.getElementById('callBtn');
+        const hangupBtn = document.getElementById('hangupBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        const micIcon = document.getElementById('micIcon');
+        const incomingOverlay = document.getElementById('incomingOverlay');
+        const acceptBtn = document.getElementById('acceptBtn');
+        const declineBtn = document.getElementById('declineBtn');
+
+        // Initial setup on window load
+        window.addEventListener('load', () => {
+            // Subscribe to Pi online/battery status transitions
+            onValue(ref(db, `users/${BLIND_USER_ID}/status`), (snapshot) => {
+                const status = snapshot.val();
+                if (status) {
+                    const online = !!status.piReachable;
+                    statusDot.className = `logo-dot ${online ? '' : 'offline'}`;
+                    deviceHeader.innerText = `IRIS GLASSES (${online ? 'ONLINE' : 'OFFLINE'})`;
+                    
+                    if (status.batteryLevel !== undefined) {
+                        batteryBadge.style.display = 'inline-flex';
+                        batteryBadge.innerHTML = `<span>🔋 Battery: ${status.batteryLevel}%</span>`;
+                    } else {
+                        batteryBadge.style.display = 'none';
+                    }
+                } else {
+                    statusDot.className = 'logo-dot offline';
+                    deviceHeader.innerText = 'IRIS GLASSES (OFFLINE)';
+                    batteryBadge.style.display = 'none';
+                }
+            });
+
+            // Listen for changes in Call Node state machine
+            onValue(ref(db, `users/${BLIND_USER_ID}/call`), async (snapshot) => {
+                const callData = snapshot.val();
+                const state = callData?.state || 'idle';
+                await handleStateTransition(state, callData);
+            });
+
+            // Bind UI Buttons
+            callBtn.addEventListener('click', startCallDialing);
+            hangupBtn.addEventListener('click', endCall);
+            declineBtn.addEventListener('click', endCall);
+            acceptBtn.addEventListener('click', acceptIncomingCall);
+            muteBtn.addEventListener('click', toggleMute);
+        });
+
+        // ----------------- SYNTHESIZED SOUND LOOP (Web Audio API) -----------------
+        function startRingtoneSound() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            function playDoubleBeep() {
+                if (!audioCtx) return;
+                const playBeep = (delay) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(550, audioCtx.currentTime + delay); 
+                    
+                    gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+                    gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + delay + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.4);
+                    
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    
+                    osc.start(audioCtx.currentTime + delay);
+                    osc.stop(audioCtx.currentTime + delay + 0.5);
+                };
+                
+                playBeep(0);
+                playBeep(0.2);
+            }
+            
+            playDoubleBeep();
+            ringInterval = setInterval(playDoubleBeep, 2000);
+        }
+
+        function stopRingtoneSound() {
+            if (ringInterval) {
+                clearInterval(ringInterval);
+                ringInterval = null;
+            }
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
+        }
+
+        // ----------------- WebRTC Core Operations -----------------
+        async function initWebRTC() {
+            peerConnection = new RTCPeerConnection(configuration);
+
+            // 1. Receive incoming remote media stream from Pi
+            peerConnection.ontrack = (event) => {
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.className = 'active';
+                    standbyView.style.display = 'none';
+                    callTimeText.innerText = "STREAM LIVE";
+                }
+            };
+
+            // 2. Transmit local ICE candidates to Firebase
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const candRef = ref(db, `users/${BLIND_USER_ID}/call/webrtc/ice_candidates/caregiver`);
+                    push(candRef, event.candidate.toJSON());
+                }
+            };
+
+            // 3. Capture local microphone input to send to Pi
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+                
+                // Align mic status with local state
+                localStream.getAudioTracks().forEach(track => track.enabled = !localMuted);
+            } catch (err) {
+                console.warn("Could not capture local microphone track:", err.message);
+            }
+        }
+
+        function clearWebRTC() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            remoteVideo.srcObject = null;
+            remoteVideo.className = '';
+            standbyView.style.display = 'flex';
+        }
+
+        // ----------------- Signaling Operations -----------------
+        async function startCallDialing() {
+            isCaller = true;
+            stopRingtoneSound();
+            
+            const newCall = {
+                state: 'ringing',
+                initiator: 'caregiver',
+                room: 'https://iris-videocall.vercel.app',
+                timestamp: Date.now()
+            };
+
+            await update(ref(db, `users/${BLIND_USER_ID}/call`), newCall);
+        }
+
+        async function acceptIncomingCall() {
+            stopRingtoneSound();
+            incomingOverlay.classList.remove('active');
+            
+            await update(ref(db, `users/${BLIND_USER_ID}/call`), { state: 'in_call' });
+        }
+
+        async function endCall() {
+            clearWebRTC();
+            stopRingtoneSound();
+            isCaller = false;
+            
+            // Revert state to idle and scrub database WebRTC signaling node
+            await update(ref(db, `users/${BLIND_USER_ID}/call`), { state: 'idle' });
+            await remove(ref(db, `users/${BLIND_USER_ID}/call/webrtc`));
+        }
+
+        function toggleMute() {
+            localMuted = !localMuted;
+            if (localStream) {
+                localStream.getAudioTracks().forEach(track => track.enabled = !localMuted);
+            }
+            muteBtn.classList.toggle('muted', localMuted);
+            muteBtn.title = localMuted ? "Unmute Microphone" : "Mute Microphone";
+            micIcon.style.fill = localMuted ? "#ffffff" : "#ffffff";
+        }
+
+        // ----------------- State Machine Router -----------------
+        async function handleStateTransition(state, data) {
+            if (currentState === state) return;
+            currentState = state;
+
+            // UI layouts
+            if (state === 'idle' || state === 'ended') {
+                stopRingtoneSound();
+                clearWebRTC();
+                
+                incomingOverlay.classList.remove('active');
+                callBtn.style.display = 'flex';
+                hangupBtn.style.display = 'none';
+                callInfoBadge.classList.remove('active');
+                
+                isCaller = false;
+            } 
+            else if (state === 'ringing') {
+                startRingtoneSound();
+                
+                if (data?.initiator === 'pi') {
+                    // Incoming call overlay
+                    incomingOverlay.classList.add('active');
+                } else {
+                    // Outgoing call overlay
+                    callBtn.style.display = 'none';
+                    hangupBtn.style.display = 'flex';
+                    callInfoBadge.classList.add('active');
+                    callTimeText.innerText = "RINGING...";
+                }
+            } 
+            else if (state === 'in_call') {
+                stopRingtoneSound();
+                incomingOverlay.classList.remove('active');
+                callBtn.style.display = 'none';
+                hangupBtn.style.display = 'flex';
+                callInfoBadge.classList.add('active');
+                callTimeText.innerText = "CONNECTING...";
+
+                // Start WebRTC Negotiation
+                if (isCaller) {
+                    await initWebRTC();
+                    
+                    // Create SDP Offer
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    
+                    await update(ref(db, `users/${BLIND_USER_ID}/call/webrtc`), { 
+                        offer: { type: 'offer', sdp: offer.sdp } 
+                    });
+
+                    // Listen for incoming SDP Answer from the Pi
+                    onValue(ref(db, `users/${BLIND_USER_ID}/call/webrtc/answer`), async (snapshot) => {
+                        const answer = snapshot.val();
+                        if (answer && peerConnection && !peerConnection.currentRemoteDescription) {
+                            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                        }
+                    });
+                } else {
+                    // Answerer: wait for Offer from Pi
+                    await initWebRTC();
+
+                    onValue(ref(db, `users/${BLIND_USER_ID}/call/webrtc/offer`), async (snapshot) => {
+                        const offer = snapshot.val();
+                        if (offer && peerConnection && !peerConnection.currentRemoteDescription) {
+                            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                            
+                            const answer = await peerConnection.createAnswer();
+                            await peerConnection.setLocalDescription(answer);
+                            
+                            await update(ref(db, `users/${BLIND_USER_ID}/call/webrtc`), { 
+                                answer: { type: 'answer', sdp: answer.sdp } 
+                            });
+                        }
+                    });
+                }
+
+                // Listen for ICE candidates generated by the Pi
+                onChildAdded(ref(db, `users/${BLIND_USER_ID}/call/webrtc/ice_candidates/pi`), async (snapshot) => {
+                    const candidate = snapshot.val();
+                    if (candidate && peerConnection) {
+                        try {
+                            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        } catch (e) {
+                            console.error("Error adding received ICE candidate:", e);
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
