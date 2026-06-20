@@ -695,11 +695,32 @@
                     const offer = await peerConnection.createOffer();
                     await peerConnection.setLocalDescription(offer);
                     
+                    // 1. Attempt Direct WebRTC POST to the local Pi server at http://172.20.10.2:5000/offer
+                    try {
+                        console.log("Attempting direct local WebRTC connection to http://172.20.10.2:5000/offer...");
+                        const response = await fetch('http://172.20.10.2:5000/offer', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sdp: offer.sdp, type: offer.type })
+                        });
+                        
+                        if (response.ok) {
+                            const answer = await response.json();
+                            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                            console.log("Direct Local WebRTC connected successfully via port 5000!");
+                            callTimeText.innerText = "LOCAL STREAM LIVE";
+                            return; // Direct connection succeeded, skip Firebase negotiation
+                        }
+                    } catch (err) {
+                        console.warn("Direct connection to http://172.20.10.2:5000/offer failed. Falling back to Firebase:", err.message);
+                    }
+
+                    // 2. Fallback: Write Offer to Firebase for remote signaling
                     await update(ref(db, `users/${BLIND_USER_ID}/call/webrtc`), { 
                         offer: { type: 'offer', sdp: offer.sdp } 
                     });
 
-                    // Listen for incoming SDP Answer from the Pi
+                    // Listen for incoming SDP Answer from the Pi via Firebase
                     onValue(ref(db, `users/${BLIND_USER_ID}/call/webrtc/answer`), async (snapshot) => {
                         const answer = snapshot.val();
                         if (answer && peerConnection && !peerConnection.currentRemoteDescription) {
